@@ -169,7 +169,7 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
         latex_abstract_rows += f"{row['Bar Dia']} & {row['Total Length']} & {row['Total Weight']} \\\\\n"
 
     # Full LaTeX Template
-   latex_template = f"""\\documentclass[11pt, a4paper, landscape]{{article}}
+    latex_template = f"""\\documentclass[11pt, a4paper, landscape]{{article}}
 
 \\usepackage[utf8]{{inputenc}}
 \\usepackage[margin=0.8in]{{geometry}}
