@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import math
-import numpy as np
 
 st.set_page_config(page_title="IS Code Pile Foundation Designer", layout="wide")
 
@@ -34,7 +33,6 @@ unit_wt = {8: 0.395, 10: 0.617, 12: 0.888, 16: 1.580, 20: 2.466}
 st.header("2. Input Structural Data")
 st.caption("Enter column sizes and original isolated footing dimensions. The AI will reverse-engineer the axial loads.")
 
-# Default data mimicking the Gaidhane Residence structural drawing
 default_data = pd.DataFrame({
     "ID": ["F1", "F2", "F3", "F4"],
     "Qty": [4, 4, 1, 3],
@@ -62,88 +60,72 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
     
     # IS 2911 Under-Reamed Math
     bulb_dia = 2.5 * pile_dia
-    min_spacing = 1.5 * bulb_dia  # Code requirement to prevent bulb intersection
+    min_spacing = 1.5 * bulb_dia 
     
     for index, row in input_df.iterrows():
         qty = int(row["Qty"])
         if qty <= 0: continue
             
-        # --- A. LOAD & PILE REQUIREMENT ---
         load_kn = (row["Footing L (m)"] * row["Footing B (m)"]) * sbc
         num_piles = max(1, math.ceil(load_kn / pile_capacity))
         
-        # --- B. DYNAMIC PILE CAP SIZING ---
-        edge_clearance = 150 # mm
+        edge_clearance = 150
         if num_piles == 1:
             cap_l = pile_dia + (2 * edge_clearance)
             cap_w = cap_l
-            cap_d = 450
-            mesh_x_len = (cap_l - 2*cover_fnd + 200) / 1000 # Add 100mm L-bends
+            mesh_x_len = (cap_l - 2*cover_fnd + 200) / 1000 
             mesh_y_len = mesh_x_len
             mesh_x_qty = math.ceil(cap_w / 150) + 1
             mesh_y_qty = mesh_x_qty
         else:
-            # 2-Pile Cap sizing using strict IS 2911 spacing
             cap_l = min_spacing + pile_dia + (2 * edge_clearance)
             cap_w = pile_dia + (2 * edge_clearance)
-            cap_d = 500
-            
-            # Mesh calculations
             mesh_long_len = (cap_l - 2*cover_fnd + 200) / 1000
             mesh_short_len = (cap_w - 2*cover_fnd + 200) / 1000
-            
             mesh_long_qty = math.ceil(cap_w / 150) + 1
             mesh_short_qty = math.ceil(cap_l / 150) + 1
 
-        # --- C. BBS ROW GENERATION ---
-        
         # 1. Piles
         total_piles = num_piles * qty
-        pile_main_len = pile_depth + 0.5 # 0.5m anchorage into cap
+        pile_main_len = pile_depth + 0.5 
         bbs_data.append({"Element": f"{row['ID']} - Piles Main", "Shape": "L (Vertical)", "Dia": 12, "Members": total_piles, "Bars/Mem": 6, "Total Bars": total_piles*6, "Cut Length (m)": pile_main_len, "Total Len (m)": total_piles*6*pile_main_len})
         total_steel[12] += total_piles * 6 * pile_main_len
         
-        # Spiral Ties (Assuming 150mm pitch)
         spiral_length = (pile_depth / 0.15) * (math.pi * (pile_dia - 2*cover_fnd)/1000)
-        bbs_data.append({"Element": f"{row['ID']} - Pile Spiral", "Shape": "◯", "Dia": 8, "Members": total_piles, "Bars/Mem": 1, "Total Bars": total_piles, "Cut Length (m)": round(spiral_length,2), "Total Len (m)": round(total_piles*spiral_length,2)})
+        bbs_data.append({"Element": f"{row['ID']} - Pile Spiral", "Shape": r"\bigcirc", "Dia": 8, "Members": total_piles, "Bars/Mem": 1, "Total Bars": total_piles, "Cut Length (m)": round(spiral_length,2), "Total Len (m)": round(total_piles*spiral_length,2)})
         total_steel[8] += total_piles * spiral_length
         
         # 2. Pile Caps
         if num_piles == 1:
-            bbs_data.append({"Element": f"{row['ID']} - Cap Mesh X", "Shape": "└─┘", "Dia": 10, "Members": qty, "Bars/Mem": mesh_x_qty, "Total Bars": qty*mesh_x_qty, "Cut Length (m)": mesh_x_len, "Total Len (m)": qty*mesh_x_qty*mesh_x_len})
-            bbs_data.append({"Element": f"{row['ID']} - Cap Mesh Y", "Shape": "└─┘", "Dia": 10, "Members": qty, "Bars/Mem": mesh_y_qty, "Total Bars": qty*mesh_y_qty, "Cut Length (m)": mesh_y_len, "Total Len (m)": qty*mesh_y_qty*mesh_y_len})
+            bbs_data.append({"Element": f"{row['ID']} - Cap Mesh X", "Shape": r"\sqcup", "Dia": 10, "Members": qty, "Bars/Mem": mesh_x_qty, "Total Bars": qty*mesh_x_qty, "Cut Length (m)": mesh_x_len, "Total Len (m)": qty*mesh_x_qty*mesh_x_len})
+            bbs_data.append({"Element": f"{row['ID']} - Cap Mesh Y", "Shape": r"\sqcup", "Dia": 10, "Members": qty, "Bars/Mem": mesh_y_qty, "Total Bars": qty*mesh_y_qty, "Cut Length (m)": mesh_y_len, "Total Len (m)": qty*mesh_y_qty*mesh_y_len})
             total_steel[10] += (qty * mesh_x_qty * mesh_x_len) + (qty * mesh_y_qty * mesh_y_len)
         else:
-            bbs_data.append({"Element": f"{row['ID']} - Cap Short Span", "Shape": "└─┘", "Dia": 10, "Members": qty, "Bars/Mem": mesh_short_qty, "Total Bars": qty*mesh_short_qty, "Cut Length (m)": mesh_short_len, "Total Len (m)": round(qty*mesh_short_qty*mesh_short_len, 2)})
-            bbs_data.append({"Element": f"{row['ID']} - Cap Long Span", "Shape": "└─┘", "Dia": 12, "Members": qty, "Bars/Mem": mesh_long_qty, "Total Bars": qty*mesh_long_qty, "Cut Length (m)": mesh_long_len, "Total Len (m)": round(qty*mesh_long_qty*mesh_long_len, 2)})
+            bbs_data.append({"Element": f"{row['ID']} - Cap Short Span", "Shape": r"\sqcup", "Dia": 10, "Members": qty, "Bars/Mem": mesh_short_qty, "Total Bars": qty*mesh_short_qty, "Cut Length (m)": mesh_short_len, "Total Len (m)": round(qty*mesh_short_qty*mesh_short_len, 2)})
+            bbs_data.append({"Element": f"{row['ID']} - Cap Long Span", "Shape": r"\sqcup", "Dia": 12, "Members": qty, "Bars/Mem": mesh_long_qty, "Total Bars": qty*mesh_long_qty, "Cut Length (m)": mesh_long_len, "Total Len (m)": round(qty*mesh_long_qty*mesh_long_len, 2)})
             total_steel[10] += (qty * mesh_short_qty * mesh_short_len)
             total_steel[12] += (qty * mesh_long_qty * mesh_long_len)
 
-        # 3. Columns (Assumed 1.5m below ground)
+        # 3. Columns
         col_l, col_b = row["Col L (mm)"], row["Col B (mm)"]
-        
-        # Main Steel
         main_dia = int(row["Main Dia (mm)"])
         if main_dia > 0:
-            main_len = 1.5 + 0.6  # 1.5m height + 0.6m L-shoe
+            main_len = 1.5 + 0.6 
             bbs_data.append({"Element": f"Col {row['ID']} - Main", "Shape": "L", "Dia": main_dia, "Members": qty, "Bars/Mem": int(row["Main Qty"]), "Total Bars": qty*int(row["Main Qty"]), "Cut Length (m)": main_len, "Total Len (m)": round(qty*int(row["Main Qty"])*main_len, 2)})
             total_steel[main_dia] += qty * int(row["Main Qty"]) * main_len
             
-        # Secondary Steel
         sec_dia = int(row["Sec Dia (mm)"])
         if sec_dia > 0:
             bbs_data.append({"Element": f"Col {row['ID']} - Sec", "Shape": "L", "Dia": sec_dia, "Members": qty, "Bars/Mem": int(row["Sec Qty"]), "Total Bars": qty*int(row["Sec Qty"]), "Cut Length (m)": main_len, "Total Len (m)": round(qty*int(row["Sec Qty"])*main_len, 2)})
             total_steel[sec_dia] += qty * int(row["Sec Qty"]) * main_len
 
-        # Column Ties (Dynamic calculation with seismic hooks)
         core_l = col_l - (2 * cover_col)
         core_b = col_b - (2 * cover_col)
-        tie_cut_len = (2 * (core_l + core_b) + (24 * 8)) / 1000 # 24d for 135-deg hooks
-        
-        bbs_data.append({"Element": f"Col {row['ID']} - Ties", "Shape": "▭", "Dia": 8, "Members": qty, "Bars/Mem": 10, "Total Bars": qty*10, "Cut Length (m)": round(tie_cut_len,2), "Total Len (m)": round(qty*10*tie_cut_len, 2)})
+        tie_cut_len = (2 * (core_l + core_b) + (24 * 8)) / 1000 
+        bbs_data.append({"Element": f"Col {row['ID']} - Ties", "Shape": r"\square", "Dia": 8, "Members": qty, "Bars/Mem": 10, "Total Bars": qty*10, "Cut Length (m)": round(tie_cut_len,2), "Total Len (m)": round(qty*10*tie_cut_len, 2)})
         total_steel[8] += qty * 10 * tie_cut_len
 
-    # --- RENDER TABLES ---
+    # --- SHOW TABLES IN APP ---
     st.subheader("1. Code-Compliant Bar Bending Schedule")
     df_bbs = pd.DataFrame(bbs_data)
     st.dataframe(df_bbs, use_container_width=True, hide_index=True)
@@ -153,21 +135,112 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
     
     abstract_data = []
     grand_total = 0
-    
     for dia, length in total_steel.items():
         if length > 0:
             weight = length * unit_wt.get(dia, 0)
             grand_total += weight
             abstract_data.append({
-                "Bar Dia (mm)": f"{dia} mm",
-                "Total Length (m)": round(length, 1),
-                "Unit Weight (kg/m)": unit_wt.get(dia, 0),
-                "Total Weight (kg)": round(weight, 1)
+                "Bar Dia": f"{dia} mm",
+                "Total Length": f"{round(length, 1)} m",
+                "Total Weight": f"{round(weight, 1)} kg"
             })
             
     col1, col2 = st.columns([2, 1])
     with col1:
         st.table(pd.DataFrame(abstract_data))
     with col2:
-        st.info("Calculations based strictly on IS 2911 spacing rules and IS 456 detailing lengths.")
         st.success(f"### 🛒 Grand Total (incl. 5% waste):\n **{grand_total * 1.05:.1f} kg**")
+
+    # ==========================================
+    # 4. DYNAMIC LATEX REPORT GENERATOR
+    # ==========================================
+    st.markdown("---")
+    st.subheader("📄 Export Professional Report")
+    
+    # Constructing the BBS Table Rows for LaTeX
+    latex_bbs_rows = ""
+    for row in bbs_data:
+        # Format the row for LaTeX tabularx
+        latex_bbs_rows += f"{row['Element']} & ${row['Shape']}$ & {row['Dia']} & {row['Members']} & {row['Bars/Mem']} & {row['Total Bars']} & {row['Cut Length (m)']} & {row['Total Len (m)']} \\\\\n\\midrule\n"
+        
+    # Constructing the Abstract Table Rows for LaTeX
+    latex_abstract_rows = ""
+    for row in abstract_data:
+        latex_abstract_rows += f"{row['Bar Dia']} & {row['Total Length']} & {row['Total Weight']} \\\\\n"
+
+    # Full LaTeX Template
+    latex_template = f"""\\documentclass[11pt, a4paper, landscape]{{article}}
+
+\\usepackage[utf8]{{inputenc}}
+\\usepackage[margin=0.8in]{{geometry}}
+\\usepackage{{amsmath, amssymb}}
+\\usepackage{{booktabs}}
+\\usepackage{{tabularx}}
+\\usepackage{{makecell}}
+
+\\renewcommand{{\\arraystretch}}{{1.4}}
+\\setlength{{\\aboverulesep}}{{0pt}}
+\\setlength{{\\belowrulesep}}{{0pt}}
+
+\\title{{\\textbf{{Detailed Execution Bar Bending Schedule (BBS) \\& Material Abstract}}}}
+\\author{{AI Structural Engineering Engine}}
+\\date{{}}
+
+\\begin{{document}}
+
+\\maketitle
+
+\\section*{{1. Bar Bending Schedule (BBS)}}
+\\textit{{Notes: All dimensions are in meters unless specified. Clear cover assumed as {cover_fnd}mm for foundation elements and {cover_col}mm for neck columns.}}
+
+\\vspace{{1em}}
+
+\\noindent
+\\begin{{tabularx}}{{\\textwidth}}{{@{{}} >{{\\raggedright\\arraybackslash}}X c c c c c c c @{{}}}}
+\\toprule
+\\textbf{{Element \\& Bar Description}} & \\textbf{{Shape}} & \\textbf{{Dia ($\\phi$)}} & \\makecell{{\\textbf{{No. of}}\\\\\\textbf{{Members}}}} & \\makecell{{\\textbf{{Bars per}}\\\\\\textbf{{Member}}}} & \\textbf{{Total Bars}} & \\makecell{{\\textbf{{Cut Length}}\\\\\\textbf{{(m)}}}} & \\makecell{{\\textbf{{Total Length}}\\\\\\textbf{{(m)}}}} \\\\
+\\midrule
+{latex_bbs_rows}
+\\bottomrule
+\\end{{tabularx}}
+
+\\newpage
+
+\\paperwidth=\\pdfpageheight
+\\paperheight=\\pdfpagewidth
+\\pdfpageheight=\\paperheight
+\\pdfpagewidth=\\paperwidth
+\\newgeometry{{margin=1in}}
+
+\\section*{{2. Optimized Reinforcement Abstract (Material Takeoff)}}
+
+\\textit{{Unit weights calculated using standard IS formulation: $W = \\frac{{D^2}}{{162}} \\text{{ kg/m}}$.}}
+
+\\vspace{{1em}}
+
+\\noindent
+\\begin{{tabularx}}{{\\textwidth}}{{@{{}} c >{{\\raggedright\\arraybackslash}}X r @{{}}}}
+\\toprule
+\\textbf{{Bar Dia ($\\phi$)}} & \\textbf{{Total Length (m)}} & \\textbf{{Total Weight (kg)}} \\\\
+\\midrule
+{latex_abstract_rows}
+\\midrule
+\\multicolumn{{2}}{{r}}{{\\textbf{{Sub-Total}}}} & \\textbf{{{grand_total:.1f} kg}} \\\\
+\\multicolumn{{2}}{{r}}{{\\text{{Wastage \\& Binding Wire (5\\%)}}}} & \\textbf{{{grand_total * 0.05:.1f} kg}} \\\\
+\\midrule
+\\multicolumn{{2}}{{r}}{{\\textbf{{OPTIMIZED GRAND TOTAL}}}} & \\textbf{{$\\approx$ {grand_total * 1.05:.1f} kg}} \\\\
+\\bottomrule
+\\end{{tabularx}}
+
+\\end{{document}}
+"""
+
+    # Streamlit Download Button
+    st.download_button(
+        label="📥 Download LaTeX Report (.tex)",
+        data=latex_template,
+        file_name="structural_bbs_report.tex",
+        mime="text/plain",
+        type="primary"
+    )
+    st.caption("You can upload this `.tex` file directly to Overleaf or compile it with MiKTeX/TeXStudio to generate a perfectly formatted PDF document.")
