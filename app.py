@@ -169,13 +169,13 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
         latex_abstract_rows += f"{row['Bar Dia']} & {row['Total Length']} & {row['Total Weight']} \\\\\n"
 
     # Full LaTeX Template
-    latex_template = f"""\\documentclass[11pt, a4paper, landscape]{{article}}
+   latex_template = f"""\\documentclass[11pt, a4paper, landscape]{{article}}
 
 \\usepackage[utf8]{{inputenc}}
 \\usepackage[margin=0.8in]{{geometry}}
 \\usepackage{{amsmath, amssymb}}
 \\usepackage{{booktabs}}
-\\usepackage{{tabularx}}
+\\usepackage{{xltabular}} % Replaces tabularx for multi-page capability
 \\usepackage{{makecell}}
 
 \\renewcommand{{\\arraystretch}}{{1.4}}
@@ -196,21 +196,33 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
 \\vspace{{1em}}
 
 \\noindent
-\\begin{{tabularx}}{{\\textwidth}}{{@{{}} >{{\\raggedright\\arraybackslash}}X c c c c c c c @{{}}}}
+\\begin{{xltabular}}{{\\textwidth}}{{@{{}} >{{\\raggedright\\arraybackslash}}X c c c c c c c @{{}}}}
+% --- FIRST PAGE HEADER ---
 \\toprule
 \\textbf{{Element \\& Bar Description}} & \\textbf{{Shape}} & \\textbf{{Dia ($\\phi$)}} & \\makecell{{\\textbf{{No. of}}\\\\\\textbf{{Members}}}} & \\makecell{{\\textbf{{Bars per}}\\\\\\textbf{{Member}}}} & \\textbf{{Total Bars}} & \\makecell{{\\textbf{{Cut Length}}\\\\\\textbf{{(m)}}}} & \\makecell{{\\textbf{{Total Length}}\\\\\\textbf{{(m)}}}} \\\\
 \\midrule
-{latex_bbs_rows}
+\\endfirsthead
+
+% --- REPEATING HEADER (For subsequent pages) ---
+\\toprule
+\\textbf{{Element \\& Bar Description}} & \\textbf{{Shape}} & \\textbf{{Dia ($\\phi$)}} & \\makecell{{\\textbf{{No. of}}\\\\\\textbf{{Members}}}} & \\makecell{{\\textbf{{Bars per}}\\\\\\textbf{{Member}}}} & \\textbf{{Total Bars}} & \\makecell{{\\textbf{{Cut Length}}\\\\\\textbf{{(m)}}}} & \\makecell{{\\textbf{{Total Length}}\\\\\\textbf{{(m)}}}} \\\\
+\\midrule
+\\endhead
+
+% --- FOOTER (When table breaks to next page) ---
+\\midrule
+\\multicolumn{{8}}{{r}}{{\\textit{{Continued on next page...}}}} \\\\
+\\endfoot
+
+% --- FINAL FOOTER (End of table) ---
 \\bottomrule
-\\end{{tabularx}}
+\\endlastfoot
+
+% --- DYNAMIC TABLE DATA ---
+{latex_bbs_rows}
+\\end{{xltabular}}
 
 \\newpage
-
-\\paperwidth=\\pdfpageheight
-\\paperheight=\\pdfpagewidth
-\\pdfpageheight=\\paperheight
-\\pdfpagewidth=\\paperwidth
-\\newgeometry{{margin=1in}}
 
 \\section*{{2. Optimized Reinforcement Abstract (Material Takeoff)}}
 
@@ -219,10 +231,28 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
 \\vspace{{1em}}
 
 \\noindent
-\\begin{{tabularx}}{{\\textwidth}}{{@{{}} c >{{\\raggedright\\arraybackslash}}X r @{{}}}}
+\\begin{{xltabular}}{{\\textwidth}}{{@{{}} c >{{\\raggedright\\arraybackslash}}X r @{{}}}}
+% --- FIRST PAGE HEADER ---
 \\toprule
 \\textbf{{Bar Dia ($\\phi$)}} & \\textbf{{Total Length (m)}} & \\textbf{{Total Weight (kg)}} \\\\
 \\midrule
+\\endfirsthead
+
+% --- REPEATING HEADER ---
+\\toprule
+\\textbf{{Bar Dia ($\\phi$)}} & \\textbf{{Total Length (m)}} & \\textbf{{Total Weight (kg)}} \\\\
+\\midrule
+\\endhead
+
+% --- CONTINUATION FOOTER ---
+\\midrule
+\\multicolumn{{3}}{{r}}{{\\textit{{Continued on next page...}}}} \\\\
+\\endfoot
+
+% --- FINAL FOOTER ---
+\\endlastfoot
+
+% --- DYNAMIC TABLE DATA ---
 {latex_abstract_rows}
 \\midrule
 \\multicolumn{{2}}{{r}}{{\\textbf{{Sub-Total}}}} & \\textbf{{{grand_total:.1f} kg}} \\\\
@@ -230,7 +260,7 @@ if st.button("🚀 Run IS Code Design & Generate BBS", type="primary"):
 \\midrule
 \\multicolumn{{2}}{{r}}{{\\textbf{{OPTIMIZED GRAND TOTAL}}}} & \\textbf{{$\\approx$ {grand_total * 1.05:.1f} kg}} \\\\
 \\bottomrule
-\\end{{tabularx}}
+\\end{{xltabular}}
 
 \\end{{document}}
 """
